@@ -34,7 +34,7 @@ Local adversarial evaluation framework for testing the security robustness of LL
 ---
 ## Architecture Diagram
 
-![Architecture](assets/architecture-diagram.png)
+![Architecture Diagram](https://raw.githubusercontent.com/KBJ-CSA/agentic-ai-redteam/main/Assets/Arch-diag.png)
 
 ## Project Structure
 
