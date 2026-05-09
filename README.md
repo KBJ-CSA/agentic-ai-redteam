@@ -32,6 +32,9 @@ Local adversarial evaluation framework for testing the security robustness of LL
 - Rich console visualization
 
 ---
+## Architecture Diagram
+
+![Architecture](assets/architecture-diagram.png)
 
 ## Project Structure
 
