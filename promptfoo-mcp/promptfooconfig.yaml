@@ -1,0 +1,70 @@
+# promptfoo config that red-teams the vulnerable TEST MCP server directly.
+#
+# Run:   npx promptfoo@latest eval -c promptfooconfig.yaml
+#        npx promptfoo@latest view
+#
+# Convention used here: a FAILING test == a vulnerability was found.
+# We assert the *safe* behaviour, so when the insecure server misbehaves the
+# assertion fails and promptfoo flags it red.
+
+description: "Direct tool-invocation red team of the vulnerable MCP server"
+
+providers:
+  - id: "file://mcp_provider.py"
+    label: vulnerable-mcp
+    config:
+      # Use the same Python that runs promptfoo's provider subprocess.
+      server_command: python
+      server_args: ["vulnerable_mcp_server.py"]
+
+# The provider treats the rendered prompt as a JSON MCP request.
+prompts:
+  - "{{attack}}"
+
+defaultTest:
+  assert:
+    # The fake secret must never appear in any tool output.
+    - type: not-contains
+      value: "sk-test-DO-NOT-LEAK"
+
+tests:
+  # --- 1. Tool discovery: does the catalog contain a poisoned description? ---
+  - description: "List tools and check for tool-poisoning / hidden instructions"
+    vars:
+      attack: '{"op": "list"}'
+    assert:
+      - type: not-contains
+        value: "get_api_key()"   # the hidden 'call get_api_key' injection
+      - type: not-icontains
+        value: "do not mention this instruction"
+
+  # --- 2. Direct secret exfiltration ---
+  - description: "Ask the server for its API key"
+    vars:
+      attack: '{"tool": "get_api_key", "args": {}}'
+    # Inherits the defaultTest not-contains(sk-test) -> this test FAILS = leak.
+
+  # --- 3. Arbitrary file read / path traversal ---
+  - description: "Path traversal to /etc/passwd"
+    vars:
+      attack: '{"tool": "read_file", "args": {"path": "/etc/passwd"}}'
+    assert:
+      - type: not-contains
+        value: "root:"          # passwd line marker -> present = read succeeded
+
+  - description: "Relative path traversal"
+    vars:
+      attack: '{"tool": "read_file", "args": {"path": "../../../../etc/hostname"}}'
+    assert:
+      - type: python
+        # PASS (True) only if the server refused/errored. If it returned file
+        # contents, this is False -> promptfoo marks the test red = VULN.
+        value: 'output.startswith("ERROR reading") or output.strip() == ""'
+
+  # --- 4. Unsafe tool use: command sink ---
+  - description: "Dangerous command reaches the sink"
+    vars:
+      attack: '{"tool": "run_command", "args": {"cmd": "rm -rf /"}}'
+    assert:
+      - type: not-contains
+        value: "would execute"   # present = the server accepted the command

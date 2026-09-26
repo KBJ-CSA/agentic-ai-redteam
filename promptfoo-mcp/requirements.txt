@@ -1,0 +1,4 @@
+# Server side (the vulnerable MCP server). The provider/client uses only the
+# Python standard library, so nothing is needed for promptfoo itself.
+# The server code works on both SDK v1 (FastMCP) and v2 (MCPServer).
+mcp[cli]>=1.2.0
