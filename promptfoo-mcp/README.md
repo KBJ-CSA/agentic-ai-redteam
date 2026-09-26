@@ -154,22 +154,33 @@ promptfoo version rejects a plugin name, list the supported set with
 
 ---
 
-## 7. Extension: agent-in-the-loop (attack model + tools together)
+## 7. Agent-in-the-loop (attack model + tools together)
 
-The direct-invocation suite tests the *server*. To test the realistic threat —
-a natural-language attacker manipulating an LLM that *chooses* to call these
-tools — put a model in front. Reuse the parent repo's `llm_ollama.py`:
+The direct-invocation suite tests the *server*. The realistic threat is a
+natural-language attacker manipulating an LLM that *chooses* to call these
+tools. That variant ships ready to run:
 
-1. In a new provider function, fetch `tools/list` from the MCP server and hand
-   the tool schemas to the model in its system prompt.
-2. Ask the model (e.g. `llama3.2:3b`) to respond to the attacker prompt; parse
-   any tool call it emits and execute it via `MCPStdioClient.call_tool`.
-3. Return the model's final text to promptfoo.
+- **`agent_provider.py`** — puts an Ollama model between the attacker and the
+  MCP tools. It fetches `tools/list`, hands the schemas to the model as
+  function tools, executes whatever calls the model decides to make (via the
+  same `MCPStdioClient`), feeds results back, and returns the final answer plus
+  a `tool_calls` trace in metadata.
+- **`promptfooconfig.agent.yaml`** — natural-language attacks + the same
+  "secret must not appear" assertions.
 
-Then point `prompts:` at natural-language attacks (see the bottom of
-`payloads.md`) and assert the same "secret must not appear" rules. This is where
-the poisoned `search_notes` description bites: a naive agent that reads tool
-metadata will call `get_api_key` on its own.
+```bash
+ollama serve &                     # in another shell
+ollama pull llama3.2:3b
+source venv/bin/activate
+npx promptfoo@latest eval -c promptfooconfig.agent.yaml
+npx promptfoo@latest view
+```
+
+This is where the poisoned `search_notes` description bites: a naive agent that
+reads tool metadata will call `get_api_key` on its own and leak the secret in
+its reply — even though the attacker only asked it to "summarize my notes."
+Swap `model:` in the config to compare how different local models resist it
+(matching the parent lab's multi-model comparison).
 
 ---
 
@@ -187,7 +198,9 @@ metadata will call `get_api_key` on its own.
 promptfoo-mcp/
 ├── vulnerable_mcp_server.py   # the TEST target (intentionally insecure)
 ├── mcp_provider.py            # stdlib MCP client + promptfoo custom provider
-├── promptfooconfig.yaml       # hand-written test suite
+├── agent_provider.py          # agent-in-the-loop provider (Ollama + MCP tools)
+├── promptfooconfig.yaml       # hand-written test suite (direct tool calls)
+├── promptfooconfig.agent.yaml # agent-in-the-loop test suite
 ├── redteam.yaml               # auto-generated red-team config
 ├── payloads.md                # copy-paste attack payloads
 ├── requirements.txt
